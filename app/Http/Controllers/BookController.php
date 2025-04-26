@@ -16,44 +16,49 @@ class BookController extends Controller
     }
 
     public function recommend(Request $request)
-    {
-        $request->validate([
-            'genre' => 'sometimes|in:fiction,non-fiction,science,history,biography,fantasy,romance',
-            'type' => 'sometimes|in:novel,textbook,comic,magazine,encyclopedia',
-            'min_rating' => 'sometimes|numeric|min:0|max:5'
-        ]);
+{
+    $request->validate([
+        'genre' => 'sometimes|nullable|in:fiction,non-fiction,science,history,biography,fantasy,romance',
+        'type' => 'sometimes|nullable|in:novel,textbook,comic,magazine,encyclopedia',
+        'min_rating' => 'sometimes|nullable|numeric|min:0|max:5'
+    ]);
 
-        $query = Book::query();
+    $query = Book::query();
 
-        if ($request->has('genre')) {
-            $query->where('genre', $request->genre);
-        }
-
-        if ($request->has('type')) {
-            $query->where('type', $request->type);
-        }
-
-        if ($request->has('min_rating')) {
-            $query->where('average_rating', '>=', $request->min_rating);
-        }
-
-        $books = $query->get()->toArray();
-
-        // Bobot kriteria (dapat disesuaikan)
-        $weights = [
-            'sales' => 0.3,
-            'average_rating' => 0.4,
-            'reviews_count' => 0.2,
-            'ratings_count' => 0.1
-        ];
-
-        // Kriteria yang digunakan
-        $criteria = array_keys($weights);
-
-        $recommendations = $this->topsisService->calculateTopsis($books, $weights, $criteria);
-
-        return view('recommendations', compact('recommendations'));
+    if (!empty($request->genre)) {
+        $query->where('genre', $request->genre);
     }
+
+    if (!empty($request->type)) {
+        $query->where('type', $request->type);
+    }
+
+    if (!empty($request->min_rating)) {
+        $query->where('average_rating', '>=', $request->min_rating);
+    }
+
+    $books = $query->get();
+
+    // Bobot kriteria
+    $weights = [
+        'sales' => 0.3,
+        'average_rating' => 0.4,
+        'reviews_count' => 0.2,
+        'ratings_count' => 0.1
+    ];
+
+    $criteria = array_keys($weights);
+
+    // Jika tidak ada buku, langsung kosongkan rekomendasi
+    $recommendations = $books->isNotEmpty()
+        ? $this->topsisService->calculateTopsis($books->toArray(), $weights, $criteria)
+        : [];
+
+    // Pastikan filter lagi, jaga-jaga hasil topsis null
+    $recommendations = collect($recommendations)->filter()->values()->toArray();
+
+    return view('recommendations', compact('recommendations'));
+}
 
     // Method lainnya untuk CRUD buku
 }

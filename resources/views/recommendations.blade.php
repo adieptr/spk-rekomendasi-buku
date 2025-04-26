@@ -44,7 +44,7 @@
         </div>
     </form>
 
-    @if(count($recommendations) > 0)
+    @if(!empty($recommendations))
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead>
@@ -74,7 +74,13 @@
             </table>
         </div>
     @else
-        <div class="alert alert-info">No books found matching your criteria.</div>
+    <div class="d-flex flex-column align-items-center justify-content-center my-5">
+        <img src="https://cdn-icons-png.flaticon.com/512/4076/4076549.png" alt="No Books Found" width="150" class="mb-4" style="opacity: 0.7;">
+        <h4 class="text-muted mb-3">No books found matching your criteria.</h4>
+        <a href="{{ route('recommend') }}" class="btn btn-outline-primary">
+            ← Back to Filter
+        </a>
+    </div>
     @endif
 </div>
 @endsection

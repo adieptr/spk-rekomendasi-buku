@@ -2,10 +2,16 @@
 
 namespace App\Services;
 
+use Exception;
+
 class TopsisService
 {
-    public function calculateTopsis($books, $weights, $criteria)
+    public function calculateTopsis(array $books, array $weights, array $criteria): array
     {
+        if (empty($books) || empty($weights) || empty($criteria)) {
+            throw new Exception('Books, weights, or criteria cannot be empty.');
+        }
+
         // Step 1: Normalisasi matriks keputusan
         $normalizedMatrix = $this->normalizeMatrix($books, $criteria);
 
@@ -22,25 +28,18 @@ class TopsisService
         $preferences = $this->calculatePreferences($distances, count($books));
 
         // Menggabungkan hasil dengan data buku
-        $result = [];
-        foreach ($books as $index => $book) {
-            $result[] = [
+        $result = collect($books)->map(function ($book, $index) use ($preferences) {
+            return [
                 'book' => $book,
                 'preference' => $preferences[$index]
             ];
-        }
-
-        // Mengurutkan berdasarkan nilai preferensi tertinggi
-        usort($result, function ($a, $b) {
-            return $b['preference'] <=> $a['preference'];
-        });
+        })->sortByDesc('preference')->values()->toArray();
 
         return $result;
     }
 
-    private function normalizeMatrix($books, $criteria)
+    private function normalizeMatrix(array $books, array $criteria): array
     {
-        $matrix = [];
         $sumSquares = [];
 
         // Inisialisasi sum squares
@@ -51,15 +50,17 @@ class TopsisService
         // Hitung sum squares
         foreach ($books as $book) {
             foreach ($criteria as $criterion) {
-                $sumSquares[$criterion] += pow($book[$criterion], 2);
+                $sumSquares[$criterion] += pow($book[$criterion] ?? 0, 2);
             }
         }
 
         // Normalisasi
+        $matrix = [];
         foreach ($books as $book) {
             $normalized = [];
             foreach ($criteria as $criterion) {
-                $normalized[$criterion] = $book[$criterion] / sqrt($sumSquares[$criterion]);
+                $denominator = sqrt($sumSquares[$criterion]);
+                $normalized[$criterion] = $denominator == 0 ? 0 : ($book[$criterion] ?? 0) / $denominator;
             }
             $matrix[] = $normalized;
         }
@@ -67,14 +68,14 @@ class TopsisService
         return $matrix;
     }
 
-    private function weightMatrix($normalizedMatrix, $weights, $criteria)
+    private function weightMatrix(array $normalizedMatrix, array $weights, array $criteria): array
     {
         $weightedMatrix = [];
 
         foreach ($normalizedMatrix as $row) {
             $weightedRow = [];
             foreach ($criteria as $criterion) {
-                $weightedRow[$criterion] = $row[$criterion] * $weights[$criterion];
+                $weightedRow[$criterion] = ($row[$criterion] ?? 0) * ($weights[$criterion] ?? 0);
             }
             $weightedMatrix[] = $weightedRow;
         }
@@ -82,7 +83,7 @@ class TopsisService
         return $weightedMatrix;
     }
 
-    private function determineIdealSolutions($weightedMatrix, $criteria)
+    private function determineIdealSolutions(array $weightedMatrix, array $criteria): array
     {
         $positiveIdeal = [];
         $negativeIdeal = [];
@@ -99,7 +100,7 @@ class TopsisService
         ];
     }
 
-    private function calculateDistances($weightedMatrix, $idealSolutions, $criteria)
+    private function calculateDistances(array $weightedMatrix, array $idealSolutions, array $criteria): array
     {
         $distances = [];
 
@@ -108,8 +109,8 @@ class TopsisService
             $negativeDistance = 0;
 
             foreach ($criteria as $criterion) {
-                $positiveDistance += pow($row[$criterion] - $idealSolutions['positive'][$criterion], 2);
-                $negativeDistance += pow($row[$criterion] - $idealSolutions['negative'][$criterion], 2);
+                $positiveDistance += pow(($row[$criterion] ?? 0) - ($idealSolutions['positive'][$criterion] ?? 0), 2);
+                $negativeDistance += pow(($row[$criterion] ?? 0) - ($idealSolutions['negative'][$criterion] ?? 0), 2);
             }
 
             $distances[] = [
@@ -118,15 +119,24 @@ class TopsisService
             ];
         }
 
+        // [Opsional] Debug distances
+        /*
+        logger('Distances:', $distances);
+        */
+
         return $distances;
     }
 
-    private function calculatePreferences($distances, $count)
+    private function calculatePreferences(array $distances, int $count): array
     {
         $preferences = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $preferences[$i] = $distances[$i]['negative'] / ($distances[$i]['positive'] + $distances[$i]['negative']);
+            $positive = $distances[$i]['positive'] ?? 0;
+            $negative = $distances[$i]['negative'] ?? 0;
+            $denominator = $positive + $negative;
+
+            $preferences[$i] = ($denominator == 0) ? 0 : ($negative / $denominator);
         }
 
         return $preferences;
