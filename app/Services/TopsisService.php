@@ -12,19 +12,19 @@ class TopsisService
             throw new Exception('Books, weights, or criteria cannot be empty.');
         }
 
-        // Step 1: Normalisasi matriks keputusan
+        //1: Normalisasi matriks keputusan
         $normalizedMatrix = $this->normalizeMatrix($books, $criteria);
 
-        // Step 2: Pembobotan matriks ternormalisasi
+        //2: Pembobotan matriks ternormalisasi
         $weightedMatrix = $this->weightMatrix($normalizedMatrix, $weights, $criteria);
 
-        // Step 3: Menentukan solusi ideal positif dan negatif
+        //3: Menentukan solusi ideal positif dan negatif
         $idealSolutions = $this->determineIdealSolutions($weightedMatrix, $criteria);
 
-        // Step 4: Menghitung jarak terhadap solusi ideal
+        //4: Menghitung jarak terhadap solusi ideal
         $distances = $this->calculateDistances($weightedMatrix, $idealSolutions, $criteria);
 
-        // Step 5: Menghitung nilai preferensi
+        //5: Menghitung nilai preferensi
         $preferences = $this->calculatePreferences($distances, count($books));
 
         // Menggabungkan hasil dengan data buku
