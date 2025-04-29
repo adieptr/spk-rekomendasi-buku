@@ -3,62 +3,77 @@
 namespace App\Http\Controllers;
 
 use App\Models\Book;
-use App\Services\TopsisService;
 use Illuminate\Http\Request;
 
 class BookController extends Controller
 {
-    protected $topsisService;
-
-    public function __construct(TopsisService $topsisService)
-    {
-        $this->topsisService = $topsisService;
-    }
-
     public function recommend(Request $request)
-{
-    $request->validate([
-        'genre' => 'sometimes|nullable|in:fiction,non-fiction,science,history,biography,fantasy,romance',
-        'type' => 'sometimes|nullable|in:novel,textbook,comic,magazine,encyclopedia',
-        'min_rating' => 'sometimes|nullable|numeric|min:0|max:5'
-    ]);
+    {
+        // Ambil semua buku dari database
+        $books = Book::all();
 
-    $query = Book::query();
+        // Hitung preferensi untuk setiap buku
+        $preferences = $this->getPreferences($request, $books);
 
-    if (!empty($request->genre)) {
-        $query->where('genre', $request->genre);
+        // Gabungkan buku dengan preferensi
+        $recommendations = $books->map(function ($book, $index) use ($preferences) {
+            return [
+                'book' => $book,
+                'preference' => $preferences[$index] ?? 0, // default 0 jika tidak ada
+            ];
+        })
+        ->sortByDesc('preference') // Urutkan dari preferensi tertinggi
+        ->values()
+        ->all();
+
+        // Filter berdasarkan genre, type, dan minimum rating
+        if ($request->filled('genre')) {
+            $recommendations = array_filter($recommendations, function ($rec) use ($request) {
+                return $rec['book']->genre === $request->genre;
+            });
+        }
+
+        if ($request->filled('type')) {
+            $recommendations = array_filter($recommendations, function ($rec) use ($request) {
+                return $rec['book']->type === $request->type;
+            });
+        }
+
+        if ($request->filled('min_rating')) {
+            $recommendations = array_filter($recommendations, function ($rec) use ($request) {
+                return $rec['book']->average_rating >= (float) $request->min_rating;
+            });
+        }
+
+        return view('recommendations', [
+            'recommendations' => $recommendations,
+        ]);
     }
 
-    if (!empty($request->type)) {
-        $query->where('type', $request->type);
+    // Hitung preferensi untuk setiap buku
+    private function getPreferences(Request $request, $books)
+    {
+        $preferences = [];
+
+        foreach ($books as $book) {
+            $score = 0;
+
+            // Tambah skor kalau genre cocok
+            if ($request->filled('genre') && $book->genre == $request->genre) {
+                $score += 0.5;
+            }
+
+            // Tambah skor kalau type cocok
+            if ($request->filled('type') && $book->type == $request->type) {
+                $score += 0.3;
+            }
+
+            // Tambah skor dari rating
+            $score += ($book->average_rating / 5) * 0.2;
+
+            $preferences[] = $score; // Skor akhir
+        }
+
+        return $preferences;
     }
-
-    if (!empty($request->min_rating)) {
-        $query->where('average_rating', '>=', $request->min_rating);
-    }
-
-    $books = $query->get();
-
-    // Bobot kriteria
-    $weights = [
-        'sales' => 0.3,
-        'average_rating' => 0.4,
-        'reviews_count' => 0.2,
-        'ratings_count' => 0.1
-    ];
-
-    $criteria = array_keys($weights);
-
-    // Jika tidak ada buku, langsung kosongkan rekomendasi
-    $recommendations = $books->isNotEmpty()
-        ? $this->topsisService->calculateTopsis($books->toArray(), $weights, $criteria)
-        : [];
-
-    // Pastikan filter lagi, jaga-jaga hasil topsis null
-    $recommendations = collect($recommendations)->filter()->values()->toArray();
-
-    return view('recommendations', compact('recommendations'));
-}
-
-    // Method lainnya untuk CRUD buku
 }
